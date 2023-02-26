@@ -275,6 +275,13 @@ draw_text :: proc(info: TextBoxInfo, color: Color) {
 	rl.DrawTextEx(info.font.font, info.text, { f32(info.rect.x), f32(info.rect.y) }, info.font.size, info.font.spacing, color)
 }
 
+update_mouse :: proc(x, y: f32, set_pos: bool) {
+	g.mouse_x = x
+	g.mouse_y = y
+	g.mouse_v2 = { x, y }
+	if set_pos { rl.SetMousePosition(i32(g.mouse_x), i32(g.mouse_y)) }
+}
+
 UIState :: struct {
 	width: int,
 	layout: []FRect,
@@ -291,15 +298,16 @@ ui_update :: proc(siglist: ^map[KeybindName]SignalTriggerInfo, state: ^UIState) 
 
 	moved := false
 	if (.MoveDown in siglist^) {
-		c_y = min(c_y, max_y)
+		c_y = min(c_y + 1, max_y)
 		moved = true
 	}
 
 	animptr := anim_get(&g.animation_system, ANIM_UI_PTR)
 	assert(animptr != nil)
-	if (.PtrMove in siglist^) { // user cursor movement overrides this
+	if (.PtrMove in siglist^) { // user cursor movement cancels everything
 		animptr.active = false
 		animptr.deltas = 0.0
+		state.current = -1
 		return
 	}
 
@@ -310,7 +318,7 @@ ui_update :: proc(siglist: ^map[KeybindName]SignalTriggerInfo, state: ^UIState) 
 		anim_ui_vecs[1] = g.mouse_v2 // current mouse
 	}
 
-	animptr.deltas = clamp(0.0, 1.0, animptr.deltas)
+	adjusted_perc := animptr.deltas * (60 / 4)
 }
 
 main :: proc() {
@@ -482,18 +490,13 @@ main :: proc() {
 
 		global_bounds := IRect{ 0, 0, g.sw_i32, g.sh_i32 }
 
-		update_mouse :: proc(x, y: f32) {
-			g.mouse_x = x
-			g.mouse_y = y
-			g.mouse_v2 = { x, y }
-		}
-		update_mouse(f32(rl.GetMouseX()), f32(rl.GetMouseY()))
+		update_mouse(f32(rl.GetMouseX()), f32(rl.GetMouseY()), false)
 
 		mdelta := rl.GetMouseDelta()
 		g.mouse_delta_v2 = { f32(mdelta.x), f32(mdelta.y) }
 		siglist := event_get_signal_analysis_from_events(&g.bindings, g.mouse_delta_v2, context.temp_allocator)
 
-		// Move mouse via gamepad or other pointer devices other than mouse
+		// Mouse movement via gamepad axis
 		/*if (.PtrMove in siglist) && !trigger_includes_method(&siglist[.PtrMove], .MouseMovement) {
 			// Simulate mouse movement from controller etc
 			for info, j in siglist[.PtrMove].triggered_bindings {
