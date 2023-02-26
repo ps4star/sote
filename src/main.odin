@@ -103,10 +103,43 @@ DEFAULT_UPREFS := SerializableUprefsData{
 			KEYBIND_INPUT_NIL,
 			KEYBIND_INPUT_NIL,
 		},
+		.MoveUp = {
+			{{.Key, key_to_int(.W), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_UP), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickUp), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			KEYBIND_INPUT_NIL,
+
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+		},
+		.MoveRight = {
+			{{.Key, key_to_int(.D), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_RIGHT), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickRight), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			KEYBIND_INPUT_NIL,
+
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+		},
 		.MoveDown = {
-			{{.Key, key_to_int(.A), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.Key, key_to_int(.S), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_DOWN), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerQuad, controller_quad_to_int(.LeftStickDown), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			KEYBIND_INPUT_NIL,
+
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+		},
+		.MoveLeft = {
+			{{.Key, key_to_int(.A), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_LEFT), .Down}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickLeft), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
 			KEYBIND_INPUT_NIL,
 
 			KEYBIND_INPUT_NIL,
@@ -233,6 +266,14 @@ anim_despawn :: proc(sys: ^map[string]Animation, name: string) {
 		delete_key(sys, name)
 	}
 }
+anim_reset_active :: proc(a: ^Animation) {
+	a.active = true
+	a.deltas = 0.0
+}
+anim_reset_inactive :: proc(a: ^Animation) {
+	a.active = false
+	a.deltas = 0.0
+}
 
 ANIM_MM_BUTTONS :: "mm_buttons"
 ANIM_UI_PTR :: "ui_ptr"
@@ -286,39 +327,118 @@ UIState :: struct {
 	width: int,
 	layout: []FRect,
 	current: int, // @Default(-1)
+	wraps: bool,
 }
 
 @private anim_ui_vecs := [2]FVector2{ {0.0, 0.0}, {0.0, 0.0} }
 ui_update :: proc(siglist: ^map[KeybindName]SignalTriggerInfo, state: ^UIState) {
+	moved := false
+	if state.current == -1 {
+		if (.MoveDown in siglist^) || (.MoveUp in siglist^) || (.MoveRight in siglist^) || (.MoveDown in siglist^) {
+			state.current = 0
+			moved = true
+		} else { return }
+	}
+
 	max_x := state.width - 1
 	max_y := (len(state.layout) / state.width) - 1
+	// fmt.println(max_x, max_y)
 
-	c_x := state.current % state.width
-	c_y := state.current / state.width
+	c_x := (state.current) % state.width
+	c_y := (state.current) / state.width
 
-	moved := false
-	if (.MoveDown in siglist^) {
-		c_y = min(c_y + 1, max_y)
-		moved = true
+	if !moved {
+		if (.MoveDown in siglist^) {
+			if c_y + 1 > max_y {
+				if state.wraps {
+					c_y = 0
+				} else {
+					c_y = max_y
+				}
+			} else {
+				c_y += 1
+			}
+			moved = true
+		} else if (.MoveUp in siglist^) {
+			if c_y - 1 < 0 {
+				if state.wraps {
+					c_y = max_y
+				} else {
+					c_y = 0
+				}
+			} else {
+				c_y -= 1
+			}
+			moved = true
+		} else if (.MoveRight in siglist^) {
+			if c_x + 1 > max_x {
+				if state.wraps {
+					c_x = 0
+				} else {
+					c_x = max_x
+				}
+			} else {
+				c_x += 1
+			}
+			moved = true
+		} else if (.MoveLeft in siglist^) {
+			if c_x - 1 < 0 {
+				if state.wraps {
+					c_x = max_y
+				} else {
+					c_x = 0
+				}
+			} else {
+				c_x -= 1
+			}
+			moved = true
+		}
 	}
 
 	animptr := anim_get(&g.animation_system, ANIM_UI_PTR)
 	assert(animptr != nil)
 	if (.PtrMove in siglist^) { // user cursor movement cancels everything
-		animptr.active = false
-		animptr.deltas = 0.0
+		anim_reset_inactive(animptr)
 		state.current = -1
 		return
 	}
 
 	if moved {
-		animptr.active = true
-		animptr.deltas = 0.0
-		anim_ui_vecs[0] = {  } // target
+		anim_reset_active(animptr)
+
+		next_idx := (c_x % state.width) + (c_y * state.width)
+		this_layout_rect := state.layout[next_idx]
+
+		anim_ui_vecs[0] = { this_layout_rect.x, this_layout_rect.y } // target
 		anim_ui_vecs[1] = g.mouse_v2 // current mouse
+		state.current = next_idx
 	}
 
-	adjusted_perc := animptr.deltas * (60 / 4)
+	adjusted_perc := animptr.deltas * (60 / 5)
+	if animptr.active {
+		final_vec := FVector2{ ((anim_ui_vecs[0].x - anim_ui_vecs[1].x)*adjusted_perc + anim_ui_vecs[1].x),
+			((anim_ui_vecs[0].y - anim_ui_vecs[1].y)*adjusted_perc + anim_ui_vecs[1].y) }
+		if adjusted_perc >= 1.0 {
+			final_vec = anim_ui_vecs[0]
+		}
+
+		update_mouse(final_vec.x, final_vec.y, true)
+	}
+	if adjusted_perc >= 1.0 {
+		anim_reset_inactive(animptr)
+		return
+	}
+}
+
+ui_snap :: proc(state: ^UIState) {
+	animptr := anim_get(&g.animation_system, ANIM_UI_PTR)
+	assert(animptr != nil)
+
+	if state.current == -1 { return }
+	if !animptr.active { return }
+
+	anim_reset_inactive(animptr)
+	update_mouse(anim_ui_vecs[0].x, anim_ui_vecs[0].y, true)
 }
 
 main :: proc() {
@@ -552,6 +672,7 @@ main :: proc() {
 						{},
 					},
 					current = -1,
+					wraps = true,
 				}
 
 				mm_ui_state.layout[INDEX_PLAY] = rect_add(boxes[INDEX_PLAY].rect, FRect{ boxes[INDEX_PLAY].rect.w / 2, boxes[INDEX_PLAY].rect.h / 2, 0, 0 })
@@ -561,7 +682,12 @@ main :: proc() {
 				collided_index := -1
 				for _, i in boxes {
 					pixels_wide := i32(anim_dt_mm_buttons[i][1] * f32(boxes[i].rect.w))
-					if v2_rect_collide(g.mouse_v2, boxes[i].rect) {
+
+					if mm_ui_state.current == i && (.Confirm in siglist) {
+						ui_snap(&mm_ui_state)
+						handle_mm_button_press(i)
+						break
+					} else if v2_rect_collide(g.mouse_v2, boxes[i].rect) {
 						anim_dt_mm_buttons[i][2] = 1.0
 						collided_index = i
 
@@ -570,7 +696,7 @@ main :: proc() {
 							collided_index = -1
 							break
 						}
-					} else {
+					} else { // opposite direction
 						anim_dt_mm_buttons[i][2] = -1.0
 					}
 
@@ -580,7 +706,7 @@ main :: proc() {
 					rl.DrawRectangleRec({ f32(boxes[i].rect.x - f32(pixels_wide/2)) + (boxes[i].rect.w/2),
 						f32(boxes[i].rect.y + boxes[i].rect.h),
 						f32(pixels_wide),
-						1.0
+						1.0,
 					}, rl.WHITE)
 				}
 				if collided_index > -1 {

@@ -136,7 +136,7 @@ event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, mouse_delt
 	extra: SignalExtra
 	has: bool
 	for _, i in bindings^ {
-		triggered_bindings := make([dynamic]^KeybindInput, 0, 64, context.temp_allocator)
+		triggered_bindings := make([dynamic]^KeybindInput, 0, 24, context.temp_allocator)
 		for bindlist, j in bindings^[i] {
 			value := false
 			each_bind_loop: for bind, k in bindings^[i][j] {
@@ -150,6 +150,15 @@ event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, mouse_delt
 						assert(is_button, fmt.tprintln(".Key signal gen failed; InputState is not ButtonState"))
 
 						cond = unpacked_state == .Down ? rl.IsKeyPressed(cast(Keycode) bind.key) : rl.IsKeyReleased(cast(Keycode) bind.key)
+						if !cond {
+							ch: rune
+							for {
+								ch = rl.GetCharPressed()
+								if ch == 0 { break }
+
+								cond ||= rune(u8(bind.key)) == ch
+							}
+						}
 						extra = nil
 					case .MouseMovement:
 						cond = !(float_is_near(mouse_delta.x, 0)) && !(float_is_near(mouse_delta.y, 0))
