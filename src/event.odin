@@ -29,7 +29,7 @@ ControllerQuad :: enum {
 }
 
 ButtonState :: enum { Down, Up }
-QuadState :: enum { InQuad, OutOfQuad }
+QuadState :: enum { EntersQuad, LeavesQuad, InQuad, OutOfQuad }
 InputState :: union {
 	ButtonState,
 	QuadState,
@@ -87,6 +87,8 @@ KeybindName :: enum {
 	MoveLeft,
 
 	PtrMove,
+
+	DEBUG,
 }
 
 KeybindInput :: [4]struct { method: KeybindMethod, key: i32, state: InputState }
@@ -102,9 +104,9 @@ controller_quad_to_int :: proc(controller: ControllerQuad) -> (i32) { return i32
 
 // Holds info on controllers
 Controller :: struct {
-	index: i32,
-	// ptr: ^sdl.GameController,
-	// type: sdl.GameControllerType,
+	recognized: bool, // @Default(false)
+	axis_movements: [rl.GamepadAxis]f32,
+	axis_movement_deltas: [rl.GamepadAxis]f32,
 }
 
 // KeyBindingState :: bool
@@ -123,7 +125,7 @@ SignalTriggerInfo :: struct {
 }
 
 /// RAW INPUT -> ABSTRACT SIGNAL CONVERSION
-event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, mouse_delta: FVector2, alloc := context.allocator) -> (out: map[KeybindName]SignalTriggerInfo) {
+event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, controllers: ^[$N]Controller, mouse_delta: FVector2, alloc := context.allocator) -> (out: map[KeybindName]SignalTriggerInfo) {
 	set_signal :: #force_inline proc(m: ^map[KeybindName]SignalTriggerInfo, index: KeybindName, binds: [dynamic]^KeybindInput, extra: SignalExtra, to_set: bool) {
 		m^[index] = SignalTriggerInfo{
 			active = to_set,
@@ -135,7 +137,7 @@ event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, mouse_delt
 	out = make(type_of(out), 16, alloc)
 	extra: SignalExtra
 	has: bool
-	for _, i in bindings^ {
+	for bind_name, i in bindings^ {
 		triggered_bindings := make([dynamic]^KeybindInput, 0, 24, context.temp_allocator)
 		for bindlist, j in bindings^[i] {
 			value := false
@@ -193,35 +195,56 @@ event_get_signal_analysis_from_events :: proc(bindings: ^KeyBindings, mouse_delt
 						unpacked_state, is_quad := bind.state.(QuadState)
 						log_assert(is_quad, fmt.tprintln(".ControllerQuad signal gen failed; InputState is not QuadState"))
 
-						check_motion :: proc(which: []rl.GamepadAxis, pos_or_neg: []int) -> (bool, ControllerMovementInfo) {
+						check_motion :: proc(controllers: ^[$N2]Controller, which: []rl.GamepadAxis, pos_or_neg: []f32, delta: bool) -> (bool) {
 							log_assert(len(which) == len(pos_or_neg), "check_motion: axis and pos_or_neg slice length mismatch")
 							log_assert(len(which) <= 6, "check_motion: length of slices must be <=6")
 
 							out := false
-							out_movements := make([dynamic][rl.GamepadAxis]f32, 0, 4, context.temp_allocator)
 							i: i32 = 0
-							for {
-								if !rl.IsGamepadAvailable(i) { break }
-								append(&out_movements, [rl.GamepadAxis]f32{})
+							for gpad in controllers^ {
 								for axis, j in which {
-									movement := rl.GetGamepadAxisMovement(i, axis)
-									out_movements[i][axis] = movement
-									if pos_or_neg[j] == 0 {
-										out ||= !(float_is_near(movement, 0))
-									} else if pos_or_neg[j] == -1 {
-										out ||= movement < 0
-									} else if pos_or_neg[j] == 1 {
-										out ||= movement > 0
+									movement := gpad.axis_movement_deltas[axis]
+									static_pos := gpad.axis_movements[axis]
+									if float_is_near(pos_or_neg[j], 0) { // either -1 or 1
+										if delta {
+											out ||= !float_is_near(movement, 0)
+										} else {
+											out ||= !float_is_near(static_pos, 0)
+										}
+									} else if float_is_near(pos_or_neg[j], -1) {
+										out ||= (f32(movement) if delta else static_pos) < 0
+									} else if float_is_near(pos_or_neg[j], 1) {
+										out ||= (f32(movement) if delta else static_pos) > 0
 									}
 								}
 								i += 1
 							}
-							return out, out_movements[:]
+							return out
 						}
 
 						key := ControllerQuad(bind.key)
+						check_delta: bool
+						if unpacked_state == .EntersQuad {
+							check_delta = true
+						} else if unpacked_state == .InQuad {
+							check_delta = false
+						} else if unpacked_state == .OutOfQuad {
+							check_delta = false
+						} else {
+							fmt.println(".LeavesQuad case not implemented:", i, bindings^[i][j])
+							panic("")
+						}
+
 						if key == .LeftStickMotion {
-							cond, extra = check_motion({ .LEFT_X, .LEFT_Y }, { 0, 0 })
+							cond = check_motion(controllers, { .LEFT_X, .LEFT_Y }, { 0, 0 }, check_delta)
+						} else if key == .LeftStickUp {
+							cond = check_motion(controllers, { .LEFT_Y }, { -1 }, check_delta)
+						} else if key == .LeftStickDown {
+							cond = check_motion(controllers, { .LEFT_Y }, { 1 }, check_delta)
+						}
+
+						if unpacked_state == .OutOfQuad {
+							cond = !cond
 						}
 					}
 

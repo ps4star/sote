@@ -81,9 +81,23 @@ DEFAULT_UPREFS := SerializableUprefsData{
 	vsync = true,
 
 	bindings = #partial KeyBindings{
+		.DEBUG = {
+			// {{.ControllerQuad, controller_quad_to_int(.LeftStickMotion), .LeavesQuad}, {key = -1}, {key = -1}, {key = -1}},
+			// {{.ControllerQuad, controller_quad_to_int(.LeftStickMotion), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+			KEYBIND_INPUT_NIL,
+		},
 		.PtrMove = {
 			{{.MouseMovement, 1, .Down}, {key = -1}, {key = -1}, {key = -1}},
-			{{.ControllerQuad, controller_quad_to_int(.LeftStickMotion), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			// {{.ControllerQuad, controller_quad_to_int(.LeftStickMotion), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
+			KEYBIND_INPUT_NIL,
 			KEYBIND_INPUT_NIL,
 			KEYBIND_INPUT_NIL,
 
@@ -106,7 +120,7 @@ DEFAULT_UPREFS := SerializableUprefsData{
 		.MoveUp = {
 			{{.Key, key_to_int(.W), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_UP), .Down}, {key = -1}, {key = -1}, {key = -1}},
-			{{.ControllerQuad, controller_quad_to_int(.LeftStickUp), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickUp), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
 			KEYBIND_INPUT_NIL,
 
 			KEYBIND_INPUT_NIL,
@@ -117,7 +131,7 @@ DEFAULT_UPREFS := SerializableUprefsData{
 		.MoveRight = {
 			{{.Key, key_to_int(.D), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_RIGHT), .Down}, {key = -1}, {key = -1}, {key = -1}},
-			{{.ControllerQuad, controller_quad_to_int(.LeftStickRight), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickRight), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
 			KEYBIND_INPUT_NIL,
 
 			KEYBIND_INPUT_NIL,
@@ -128,7 +142,7 @@ DEFAULT_UPREFS := SerializableUprefsData{
 		.MoveDown = {
 			{{.Key, key_to_int(.S), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_DOWN), .Down}, {key = -1}, {key = -1}, {key = -1}},
-			{{.ControllerQuad, controller_quad_to_int(.LeftStickDown), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickDown), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
 			KEYBIND_INPUT_NIL,
 
 			KEYBIND_INPUT_NIL,
@@ -139,7 +153,7 @@ DEFAULT_UPREFS := SerializableUprefsData{
 		.MoveLeft = {
 			{{.Key, key_to_int(.A), .Down}, {key = -1}, {key = -1}, {key = -1}},
 			{{.ControllerButton, controller_button_to_int(.LEFT_FACE_LEFT), .Down}, {key = -1}, {key = -1}, {key = -1}},
-			{{.ControllerQuad, controller_quad_to_int(.LeftStickLeft), .InQuad}, {key = -1}, {key = -1}, {key = -1}},
+			{{.ControllerQuad, controller_quad_to_int(.LeftStickLeft), .EntersQuad}, {key = -1}, {key = -1}, {key = -1}},
 			KEYBIND_INPUT_NIL,
 
 			KEYBIND_INPUT_NIL,
@@ -182,7 +196,7 @@ Game :: struct {
 	scene: GameScene,
 	clear_alpha: u8, // @Default(255) - used for blend effects
 
-	controllers: [dynamic]Controller,
+	controllers: [32]Controller,
 	
 	ftime_start, ftime_end: time.Time,
 	time_delta: time.Duration,
@@ -198,6 +212,10 @@ Game :: struct {
 
 	party_menu_layers: [dynamic]PartyMenuLayer,
 	animation_system: map[string]Animation,
+
+	// world select screen state
+	ws_loaded: bool,
+	ws_files: [dynamic]struct{ hnd: IOHandle, path: string },
 
 	wh_rngs: [enum { Throwaway }]WHRngState,
 
@@ -254,29 +272,74 @@ tr_get :: #force_inline proc(input: string) -> (string) {
 	return got
 }
 
-// ANIMATION
-anim_spawn :: #force_inline proc(sys: ^map[string]Animation, name: string) {
-	sys^[name] = Animation{ active = true, direction = 1.0 }
-}
-anim_get :: #force_inline proc(sys: ^map[string]Animation, name: string) -> (^Animation) {
-	return (name in sys^) ? &sys^[name] : nil
-}
-anim_despawn :: proc(sys: ^map[string]Animation, name: string) {
-	if (name in sys^) {
-		delete_key(sys, name)
+// INPUT
+update_controllers :: proc() {
+	i: i32 = 0
+	for {
+		if !rl.IsGamepadAvailable(i) { break }
+		if !g.controllers[i].recognized {
+			g.controllers[i] = Controller{}
+			g.controllers[i].recognized = true
+		}
+		i += 1
 	}
 }
-anim_reset_active :: proc(a: ^Animation) {
-	a.active = true
-	a.deltas = 0.0
-}
-anim_reset_inactive :: proc(a: ^Animation) {
-	a.active = false
-	a.deltas = 0.0
+
+update_controller_axes :: proc() {
+	for _, i in g.controllers {
+		if !g.controllers[i].recognized { continue }
+		for _, j in g.controllers[0].axis_movements {
+			this := &(g.controllers[i])
+			new_movement := rl.GetGamepadAxisMovement(i32(i), j)
+			// fmt.println(j, new_movement)
+			if new_movement > 0 && !(this.axis_movements[j] > 0) {
+				// Direction change
+				this.axis_movement_deltas[j] = 1
+			} else if new_movement < 0 && !(this.axis_movements[j] < 0) {
+				this.axis_movement_deltas[j] = -1
+			} else {
+				this.axis_movement_deltas[j] = 0 // no change
+			}
+			// if i == 0 && j == .LEFT_Y { fmt.println(this.axis_movements[j], this.axis_movement_deltas[j]) }
+
+			this.axis_movements[j] = new_movement
+		}
+	}
 }
 
-ANIM_MM_BUTTONS :: "mm_buttons"
-ANIM_UI_PTR :: "ui_ptr"
+// ANIMATION
+anim_spawn :: #force_inline proc(name: string, active := true) {
+	g.animation_system[name] = Animation{ active = active, direction = 1.0 }
+}
+anim_get :: #force_inline proc(name: string) -> (^Animation) {
+	return (name in g.animation_system) ? &g.animation_system[name] : nil
+}
+anim_despawn :: proc(name: string) {
+	if (name in g.animation_system) {
+		delete_key(&g.animation_system, name)
+	}
+}
+anim_reset_active :: proc(name: string) {
+	anim := anim_get(name)
+	assert(anim != nil)
+	anim.active = true
+	anim.deltas = 0.0
+}
+anim_reset_inactive :: proc(name: string) {
+	anim := anim_get(name)
+	assert(anim != nil)
+	anim.active = false
+	anim.deltas = 0.0
+}
+anim_active :: proc(name: string) -> (bool) {
+	anim := anim_get(name)
+	return anim == nil || anim.active
+}
+anim_deltas :: proc(name: string) -> (f32) {
+	anim := anim_get(name)
+	assert(anim != nil)
+	return anim.deltas
+}
 
 // GFX/UI
 CenterOpt :: enum { HCenter, VCenter }
@@ -323,122 +386,20 @@ update_mouse :: proc(x, y: f32, set_pos: bool) {
 	if set_pos { rl.SetMousePosition(i32(g.mouse_x), i32(g.mouse_y)) }
 }
 
-UIState :: struct {
-	width: int,
-	layout: []FRect,
-	current: int, // @Default(-1)
-	wraps: bool,
-}
+ANIM_MM_BUTTONS :: "mm_buttons"
+ANIM_UI_PTR :: "ui_ptr"
+ANIM_PARTY_MENU :: "party_menu"
 
-@private anim_ui_vecs := [2]FVector2{ {0.0, 0.0}, {0.0, 0.0} }
-ui_update :: proc(siglist: ^map[KeybindName]SignalTriggerInfo, state: ^UIState) {
-	moved := false
-	if state.current == -1 {
-		if (.MoveDown in siglist^) || (.MoveUp in siglist^) || (.MoveRight in siglist^) || (.MoveDown in siglist^) {
-			state.current = 0
-			moved = true
-		} else { return }
+enter_scene :: proc(name: GameScene) {
+	g.scene = name
+	if name == .MainMenu {
+
+	} else if name == .WorldSelect {
+		// Reset ws_* state
+		g.ws_loaded = false
+		// if g.ws_files == nil { g.ws_files = make(type_of(g.ws_files), 0, 100, context.allocator) }
+		clear(&g.ws_files)
 	}
-
-	max_x := state.width - 1
-	max_y := (len(state.layout) / state.width) - 1
-	// fmt.println(max_x, max_y)
-
-	c_x := (state.current) % state.width
-	c_y := (state.current) / state.width
-
-	if !moved {
-		if (.MoveDown in siglist^) {
-			if c_y + 1 > max_y {
-				if state.wraps {
-					c_y = 0
-				} else {
-					c_y = max_y
-				}
-			} else {
-				c_y += 1
-			}
-			moved = true
-		} else if (.MoveUp in siglist^) {
-			if c_y - 1 < 0 {
-				if state.wraps {
-					c_y = max_y
-				} else {
-					c_y = 0
-				}
-			} else {
-				c_y -= 1
-			}
-			moved = true
-		} else if (.MoveRight in siglist^) {
-			if c_x + 1 > max_x {
-				if state.wraps {
-					c_x = 0
-				} else {
-					c_x = max_x
-				}
-			} else {
-				c_x += 1
-			}
-			moved = true
-		} else if (.MoveLeft in siglist^) {
-			if c_x - 1 < 0 {
-				if state.wraps {
-					c_x = max_y
-				} else {
-					c_x = 0
-				}
-			} else {
-				c_x -= 1
-			}
-			moved = true
-		}
-	}
-
-	animptr := anim_get(&g.animation_system, ANIM_UI_PTR)
-	assert(animptr != nil)
-	if (.PtrMove in siglist^) { // user cursor movement cancels everything
-		anim_reset_inactive(animptr)
-		state.current = -1
-		return
-	}
-
-	if moved {
-		anim_reset_active(animptr)
-
-		next_idx := (c_x % state.width) + (c_y * state.width)
-		this_layout_rect := state.layout[next_idx]
-
-		anim_ui_vecs[0] = { this_layout_rect.x, this_layout_rect.y } // target
-		anim_ui_vecs[1] = g.mouse_v2 // current mouse
-		state.current = next_idx
-	}
-
-	adjusted_perc := animptr.deltas * (60 / 5)
-	if animptr.active {
-		final_vec := FVector2{ ((anim_ui_vecs[0].x - anim_ui_vecs[1].x)*adjusted_perc + anim_ui_vecs[1].x),
-			((anim_ui_vecs[0].y - anim_ui_vecs[1].y)*adjusted_perc + anim_ui_vecs[1].y) }
-		if adjusted_perc >= 1.0 {
-			final_vec = anim_ui_vecs[0]
-		}
-
-		update_mouse(final_vec.x, final_vec.y, true)
-	}
-	if adjusted_perc >= 1.0 {
-		anim_reset_inactive(animptr)
-		return
-	}
-}
-
-ui_snap :: proc(state: ^UIState) {
-	animptr := anim_get(&g.animation_system, ANIM_UI_PTR)
-	assert(animptr != nil)
-
-	if state.current == -1 { return }
-	if !animptr.active { return }
-
-	anim_reset_inactive(animptr)
-	update_mouse(anim_ui_vecs[0].x, anim_ui_vecs[0].y, true)
 }
 
 main :: proc() {
@@ -446,12 +407,9 @@ main :: proc() {
 
 	g = new(Game)
 	g.clear_alpha = 255
-	g.scene = .MainMenu
-
-	// g.events = make([dynamic]Event, 0, 20)
-	g.controllers = make([dynamic]Controller, 0, 12)
 
 	g.party_menu_layers = make([dynamic]PartyMenuLayer, 0, 12)
+	g.ws_files = make(type_of(g.ws_files), 0, 100, context.allocator)
 
 	{
 		// IO init
@@ -543,6 +501,8 @@ main :: proc() {
 		rl.SetWindowState({ .FULLSCREEN_MODE })
 	}
 
+	enter_scene(.MainMenu)
+
 	load_asset :: proc(path: string) -> (Asset) {
 		cstr_path := strings.clone_to_cstring(io_resolve_static(path, context.temp_allocator), context.temp_allocator)
 		rl_tex := rl.LoadTexture(cstr_path)
@@ -573,9 +533,10 @@ main :: proc() {
 	/// INIT STAGE 2 - AFTER SDL INIT
 	// Init assets (@TODO)
 
-	// Persistent animations
-	anim_spawn(&g.animation_system, ANIM_MM_BUTTONS)
-	anim_spawn(&g.animation_system, ANIM_UI_PTR)
+	// Spawn animations
+	anim_spawn(ANIM_MM_BUTTONS, false)
+	anim_spawn(ANIM_UI_PTR, false)
+	anim_spawn(ANIM_PARTY_MENU, false)
 
 	rl.ClearWindowState({ .WINDOW_HIDDEN })
 	mainloop: for !rl.WindowShouldClose() {
@@ -595,8 +556,8 @@ main :: proc() {
 		g.sw_i32 = rl.GetScreenWidth()
 		g.sh_i32 = rl.GetScreenHeight()
 
-		if (int(g.sw_i32) != g.sw) || (int(g.sh_i32) != g.sh) || g.sw_i32 == 0 || g.sh_i32 == 0 { // update soft layers
-			
+		if (int(g.sw_i32) != g.sw) || (int(g.sh_i32) != g.sh) || g.sw_i32 == 0 || g.sh_i32 == 0 {
+			// changed win size
 		}
 
 		g.sw = int(g.sw_i32)
@@ -611,13 +572,17 @@ main :: proc() {
 		global_bounds := IRect{ 0, 0, g.sw_i32, g.sh_i32 }
 
 		update_mouse(f32(rl.GetMouseX()), f32(rl.GetMouseY()), false)
+		update_controllers()
+		update_controller_axes()
 
 		mdelta := rl.GetMouseDelta()
 		g.mouse_delta_v2 = { f32(mdelta.x), f32(mdelta.y) }
-		siglist := event_get_signal_analysis_from_events(&g.bindings, g.mouse_delta_v2, context.temp_allocator)
+		siglist := event_get_signal_analysis_from_events(&g.bindings, &g.controllers, g.mouse_delta_v2, context.temp_allocator)
+
+		when PRINT_SIGS { fmt.println(siglist) }
 
 		// Mouse movement via gamepad axis
-		/*if (.PtrMove in siglist) && !trigger_includes_method(&siglist[.PtrMove], .MouseMovement) {
+		if (.PtrMove in siglist) && !trigger_includes_method(&siglist[.PtrMove], .MouseMovement) {
 			// Simulate mouse movement from controller etc
 			for info, j in siglist[.PtrMove].triggered_bindings {
 				for bind in info {
@@ -632,12 +597,12 @@ main :: proc() {
 							new_mx += pad[.LEFT_X] * 8
 							new_my += pad[.LEFT_Y] * 8
 						}
-						update_mouse(new_mx, new_my)
-						rl.SetMousePosition(i32(new_mx), i32(new_my))
+						update_mouse(new_mx, new_my, true)
+						// rl.SetMousePosition(i32(new_mx), i32(new_my))
 					}
 				}
 			}
-		}*/
+		}
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
@@ -663,6 +628,9 @@ main :: proc() {
 
 				MM_ANIM_SPEED :: 1.0 / 8.0
 				@static anim_dt_mm_buttons := [3][3]f32{ {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0} }
+				// [0] -> linear anim time
+				// [1] -> adjusted time
+				// [2] -> direction multiplier
 
 				// UI layout mapping for controller usage
 				@static mm_ui_state := UIState{
@@ -687,7 +655,7 @@ main :: proc() {
 						ui_snap(&mm_ui_state)
 						handle_mm_button_press(i)
 						break
-					} else if v2_rect_collide(g.mouse_v2, boxes[i].rect) {
+					} else if v2_rect_collide(g.mouse_v2, boxes[i].rect) && !anim_active(ANIM_UI_PTR) {
 						anim_dt_mm_buttons[i][2] = 1.0
 						collided_index = i
 
@@ -727,14 +695,17 @@ main :: proc() {
 			}
 
 			if (.Menu in siglist) {
-				anim_spawn(&g.animation_system, "party_menu")
+				anim_reset_active(ANIM_PARTY_MENU)
 			}
 
-			menu_anim := anim_get(&g.animation_system, "party_menu")
-			if menu_anim != nil {
+			if anim_active(ANIM_PARTY_MENU) {
 				// Draw menu items
-				anim_perc := menu_anim.deltas / 0.5 // 0.5 seconds
-				fmt.println(anim_perc, menu_anim.deltas)
+				deltas := anim_deltas(ANIM_PARTY_MENU)
+				anim_perc := deltas / 0.5 // 0.5 seconds
+				fmt.println("IS PARTY MENU")
+			} else {
+				// No party menu, just draw normally
+
 			}
 		case .Battle:
 			topleft: int
@@ -744,7 +715,9 @@ main :: proc() {
 				}
 			}
 		case .WorldSelect:
+			if !g.ws_loaded {
 
+			}
 		case .Settings:
 		case .Blank:
 		}

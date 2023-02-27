@@ -10,6 +10,7 @@ import "core:mem"
 import rl "vendor:raylib"
 
 DEBUG :: #config(DEBUG, false)
+PRINT_SIGS :: #config(PRINT_SIGS, false)
 
 /// SLICES, DYNAMICS
 append_slice_to_dynamic :: proc(dyn: ^[dynamic]$T, slice: []T) {
@@ -88,10 +89,10 @@ tween_ease_in_out :: proc(s, e, val: f32) -> (f32) {
 	return lerp(tween_ease_in(s, e, val), tween_ease_out(s, e, val), val)
 }
 
-FLOAT_NEAR_RANGE :: 0.001
-float_is_near :: proc(f, val: $T) -> (bool)
+FLOAT_NEAR_RANGE :: 0.0001
+float_is_near :: proc(f, val: $T, range := FLOAT_NEAR_RANGE) -> (bool)
 	where intrinsics.type_is_float(T) {
-	return (f >= (val - FLOAT_NEAR_RANGE)) && (f <= (val + FLOAT_NEAR_RANGE))
+	return (f >= (val - T(FLOAT_NEAR_RANGE))) && (f <= (val + T(FLOAT_NEAR_RANGE)))
 }
 
 /// VECTORS
