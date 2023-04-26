@@ -111,6 +111,7 @@ I32Rect :: struct { x, y, w, h: i32 }
 F32Rect :: struct { x, y, w, h: f32 }
 L32Rect :: struct { x, y, w, h: f64 }
 IntRect :: struct { x, y, w, h: int }
+UVRect :: struct { x, y, x2, y2: f32 }
 
 v2_add :: #force_inline proc(v1: ^$T, v2: T)
 	where T == I32Vector2 || T == F32Vector2 || T == F64Vector2 || T == IntVector2 {
@@ -299,6 +300,15 @@ rect_grow_rect :: proc(rect: $T, n: $T2) -> (T) {
 		rect.y - type_of(rect.y)(n.y),
 		rect.w + type_of(rect.w)(n.w*2),
 		rect.h + type_of(rect.h)(n.h*2),
+	}
+}
+
+rect_to_uv :: proc(viewport: IntRect, rect: IntRect) -> (UVRect) {
+	return {
+		x = (f32(rect.x) / f32(viewport.w)) * 2.0 - 1.0,
+		y = (f32(rect.y) / f32(viewport.h)) * -2.0 + 1.0,
+		x2 = (f32(rect.x + rect.w) / f32(viewport.w)) * 2.0 - 1.0,
+		y2 = (f32(rect.y + rect.h) / f32(viewport.h)) * -2.0 + 1.0,
 	}
 }
 

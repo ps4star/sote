@@ -7,7 +7,7 @@ import "core:mem"
 import "core:intrinsics"
 import "core:simd"
 
-import stbtt "vendor:stb/truetype"
+import stbtt "extlib/stb_truetype"
 
 // Some graphics primitives
 TTF_Glyph_Info :: struct {
@@ -23,25 +23,24 @@ TTF_Font :: struct {
 }
 
 // Software blitting functions
-blit_rect :: proc(rgba: []u32, x, y, w, h, src_w: int, color: Color) {
-    assert(x >= 0 && y >= 0 && x < w && y < h && src_w > -1)
-
-    rgba_as_ptr := transmute([^]u32) slice.first_ptr(rgba) // This shouldn't be any faster than a slice set, but just to be safe
+blit_rect :: proc(rgba: []u32, bounds: IntRect, x, y, w, h: int, color: Color) {
+    assert(x >= 0 && y >= 0)
 
     color_u32 := transmute(u32) color
     i, j: int
-    offset: int = x + (y * src_w)
+    offset: int = x + (y * bounds.w)
+
     for j = 0; j < h; j += 1 {
         for i = 0; i < w; i += 1 {
-            #no_bounds_check rgba_as_ptr[offset] = color_u32
+            #no_bounds_check rgba[offset] = color_u32
             offset += 1
         }
 
-        offset += src_w // Advance to next line at same X
+        offset += bounds.w // Advance to next line at same X
         offset -= w // Now push X back to start
     }
 }
 
 blit_text :: proc(rgba: []u32, font: TTF_Font, text: string, x, y: int, src_w: int, color: Color) {
-    
+
 }

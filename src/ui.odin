@@ -54,8 +54,11 @@ CenterOpts :: bit_set[enum { HCenter, VCenter }]
 	} else {
 		ctx_rect = ctx.origin_stack[ctx.origin_head - 1]
 	}
+
 	ctx_rect.x += plus.x
 	ctx_rect.y += plus.y
+	ctx_rect.w = plus.w
+	ctx_rect.h = plus.h
 	return ctx_rect
 }
 
@@ -94,7 +97,7 @@ ui_pop_origin :: proc(ctx: ^UIContext) {
 }
 
 ui_rect :: proc(ctx: ^UIContext, x, y, w, h: int) {
-	r := apply_margin(IntRect{ x, y, w, h }, ctx.margin)
+	r := contextual_rect_plus(ctx, apply_margin(IntRect{ x, y, w, h }, ctx.margin))
 	d_cmd := cast(UIDrawCommand) UIDrawCommandRect{
 		rect = r,
 
@@ -105,7 +108,7 @@ ui_rect :: proc(ctx: ^UIContext, x, y, w, h: int) {
 }
 
 ui_text :: proc(ctx: ^UIContext, text: string, x, y: int) {
-	r := apply_margin(IntRect{ x, y, 0, 0 }, ctx.margin)
+	r := contextual_rect_plus(ctx, apply_margin(IntRect{ x, y, 0, 0 }, ctx.margin))
 	d_cmd := cast(UIDrawCommand) UIDrawCommandText{
 		begin = { r.x, r.y },
 		font = ctx.font,

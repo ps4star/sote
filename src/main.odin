@@ -8,8 +8,12 @@ import "core:slice"
 import "core:intrinsics"
 
 import sdl "vendor:sdl2"
-import gl "vendor:OpenGL"
-import stbtt "vendor:stb/truetype"
+
+when ODIN_OS == .Windows {
+	import stbtt "vendor:stb/truetype"
+} else when ODIN_OS == .Linux {
+	import stbtt "extlib/stb_truetype"
+}
 
 GameScene :: enum {
 	Blank, // For transitions
@@ -23,13 +27,12 @@ GameScene :: enum {
 
 Game :: struct {
 	window: ^sdl.Window,
+	renderer: ^sdl.Renderer,
 	gl_context: sdl.GLContext,
 
 	// GL screen stuff
-	screen_pixels: [dynamic]u32, // RGBX8888
-	screen_framebuffer: u32,
-	screen_rendertex: u32,
-	screen_depthbuffer: u32,
+	screen_pixels: []u32, // RGBX8888
+	screen_tex: ^sdl.Texture,
 
 	using_sdl_fallback: bool,
 
@@ -78,8 +81,8 @@ Game :: struct {
 g: Game
 
 // Internal screen buffer size
-IBUF_W :: 320
-IBUF_H :: 240
+IBUF_W :: 528
+IBUF_H :: 297
 
 main :: proc() {
 	init_global_temporary_allocator(3 * mem.Megabyte)
@@ -177,40 +180,12 @@ main :: proc() {
 		{ .HIDDEN, .RESIZABLE, .OPENGL })
 	assert(g.window != nil, "Could not init SDL!")
 
+	g.renderer = sdl.CreateRenderer(g.window, -1, { .PRESENTVSYNC })
+	sdl.RenderSetIntegerScale(g.renderer, sdl.bool(transmute(b32) (i32(1))))
+	g.screen_tex = sdl.CreateTexture(g.renderer, cast(u32) sdl.PixelFormatEnum.RGBA8888, sdl.TextureAccess.STREAMING, IBUF_W, IBUF_H)
+	g.screen_pixels = make([]u32, IBUF_W * IBUF_H, context.allocator)
+
 	sdl.SetWindowMinimumSize(g.window, 640, 480)
-
-	{ // Init GL
-		gl.load_up_to(3, 0, proc(p: rawptr, name: cstring) { (^rawptr)(p)^ = sdl.GL_GetProcAddress(name) })
-		g.gl_context = sdl.GL_CreateContext(g.window)
-
-		// Create the framebuffer and render tex
-		pixbuf_size := IBUF_W * IBUF_H
-		g.screen_pixels = make([dynamic]u32, pixbuf_size, context.allocator) // screen buffer
-
-		gl.GenTextures(1, &g.screen_rendertex)
-		gl.BindTexture(gl.TEXTURE_2D, g.screen_rendertex)
-		gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, transmute(i32) b32(gl.TRUE))
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, IBUF_W, IBUF_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
-		gl.BindTexture(gl.TEXTURE_2D, 0)
-
-		gl.GenRenderbuffers(1, &g.screen_depthbuffer)
-		gl.BindRenderbuffer(gl.RENDERBUFFER, g.screen_depthbuffer)
-		gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT, IBUF_W, IBUF_H)
-		gl.BindRenderbuffer(gl.RENDERBUFFER, 0)
-
-		gl.GenFramebuffers(1, &g.screen_framebuffer)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, g.screen_framebuffer)
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, g.screen_rendertex, 0)
-		draw_buffers := [?]u32{ gl.COLOR_ATTACHMENT0 }
-		gl.DrawBuffers(1, slice.first_ptr(draw_buffers[:]))
-		gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, g.screen_depthbuffer)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-	}
 
 	apply_uprefs :: proc() {
 		if g.uprefs.window_maximized {
@@ -220,8 +195,6 @@ main :: proc() {
 		if g.uprefs.window_fullscreen {
 			sdl.SetWindowFullscreen(g.window, { .FULLSCREEN })
 		}
-
-		sdl.GL_SetSwapInterval(1 if g.uprefs.vsync else 0)
 	}
 	apply_uprefs()
 
@@ -308,12 +281,11 @@ main :: proc() {
 				g.should_paint = false
 			}
 		}
+		tex_bounds := IntRect{ 0, 0, IBUF_W, IBUF_H }
+		win_bounds := IntRect{ 0, 0, int(g.win_w), int(g.win_h) }
 
-		if g.should_paint { // Graphics entry point
-			gl.BindFramebuffer(gl.FRAMEBUFFER, g.screen_framebuffer)
-			gl.Viewport(0, 0, g.win_w, g.win_h)
-			gl.ClearColor(1.0, 0.0, 0.0, 1.0)
-			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
+		if g.should_paint { // Graphics entry points
+			// blit_rect(g.screen_pixels, tex_bounds, 0, 0, IBUF_W, IBUF_H, { 0, 0, 0, 0 })
 		}
 
 		#partial switch g.scene {
@@ -321,19 +293,21 @@ main :: proc() {
 			// Battle UI
 			ui := &g.ui
 			{ ui_begin(ui)
-				ui_push_origin(ui, 20, 20)
+				for this_char := 0; this_char < NUM_CHARACTERS; this_char += 1 {
+					{ ui_push_origin(ui, 20, 20) // Battle box
+						ui.color = { 255, 0, 0, 255 }
+						ui_rect(ui, 40, 40, 20, 20)
 
-				ui.color = { 255, 0, 0, 255 }
-				ui_rect(ui, 0, 0, 200, 200)
+						ui.text_center = { .HCenter }
+						ui.color = { 255, 255, 255, 255 }
+						ui_text(ui, tr_get(g.tr, g.canon_lang_key, "NIL"), 20, 20)
 
-				ui.text_center = { .HCenter }
-				ui.color = { 255, 255, 255, 255 }
-				ui_text(ui, tr_get(g.tr, g.canon_lang_key, "NIL"), 20, 20)
-
-				ui.rect_center = { .HCenter }
-				ui.color = { 0, 0, 255, 255 }
-				ui.font = g.font_std32
-				ui_rect(ui, 0, 0, 20, 20)
+						ui.rect_center = { .HCenter }
+						ui.color = { 0, 0, 255, 255 }
+						ui.font = g.font_std32
+						ui_rect(ui, 0, 0, 20, 20)
+					ui_pop_origin(ui) }
+				}
 			ui_end(ui) }
 		}
 
@@ -342,29 +316,19 @@ main :: proc() {
 				this_cmd := g.ui.cmd_stack[this_ui]
 				switch cmd in this_cmd {
 				case UIDrawCommandRect:
-					blit_rect(g.screen_pixels[:], cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, int(IBUF_W), cmd.color)
+					blit_rect(g.screen_pixels[:], tex_bounds, cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, cmd.color)
 
 				case UIDrawCommandText:
-					blit_text(g.screen_pixels[:], cmd.font, cmd.text, cmd.begin.x, cmd.begin.y, int(IBUF_W), cmd.color)
+					// blit_text(g.screen_pixels[:], cmd.font, cmd.text, cmd.begin.x, cmd.begin.y, int(tex), cmd.color)
 				}
 			}
 		}
 
 		if g.should_paint { // Frame/drawing clean-up
-			gl.BindTexture(gl.TEXTURE_2D, g.screen_rendertex)
-			gl.TexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, IBUF_W, IBUF_H, gl.RGBA, gl.UNSIGNED_BYTE, transmute(rawptr) slice.first_ptr(g.screen_pixels[:]))
-			gl.BindTexture(gl.TEXTURE_2D, 0)
+			sdl.UpdateTexture(g.screen_tex, nil, slice.first_ptr(g.screen_pixels[:]), i32(tex_bounds.w * size_of(u32)))
+			sdl.RenderCopy(g.renderer, g.screen_tex, nil, nil)
+			sdl.RenderPresent(g.renderer)
 
-			gl.BindFramebuffer(gl.READ_FRAMEBUFFER, g.screen_framebuffer)
-			gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-			gl.BlitFramebuffer(0, 0, IBUF_W, IBUF_H, 0, 0, g.win_w, g.win_h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
-
-			gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-			gl.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
-			gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-
-			gl.Finish()
-			sdl.GL_SwapWindow(g.window)
 			free_all(context.temp_allocator)
 		}
 

@@ -1,3 +1,3 @@
 #!/bin/sh
 
-odin run src/ -out:out/sote -define:DEBUG=true
+odin run src/ -collection:sote=./ -out:out/sote -define:DEBUG=true
