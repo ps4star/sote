@@ -1,0 +1,45 @@
+key;;en;;nl
+nil;;<nil>;;<nil>
+NIL;;<nil>;;<nil>
+MM_TITLE;;~ Song of The Earth ~;;~ Lied von de Aarde ~
+MM_PLAY;;Play;;NL_PLACE
+MM_SETTINGS;;Settings;;NL_PLACE
+MM_EXTRAS;;Extras;;NL_PLACE
+UI_PARTYMENU_CREATE;;Create;;NL_PLACE
+UI_PARTYMENU_CRAFT;;Craft;;NL_PLACE
+UI_PARTYMENU_DISMANTLE;;Dismantle;;NL_PLACE
+UI_PARTYMENU_SKILLTREE;;Skill Tree;;NL_PLACE
+UI_PARTYMENU_EQUIP;;Equip;;NL_PLACE
+UI_PARTYMENU_ITEMS;;Items;;NL_PLACE
+UI_PARTYMENU_BATTLE;;Battle;;NL_PLACE
+UI_PARTYMENU_COMPONENTS;;Materials;;NL_PLACE
+UI_PARTYMENU_CHEMICALS;;Chemicals;;NL_PLACE
+UI_PARTYMENU_KEYITEMS;;Key Items;;NL_PLACE
+ROLE_ABBREV_ACC;;ACC;;ACC
+ROLE_ABBREV_OBL;;OBL;;VER
+ROLE_ABBREV_ITM;;ITM;;GEB
+ROLE_ABBREV_MED;;MED;;DOK
+ROLE_ABBREV_MAN;;MAN;;MAN
+ROLE_ABBREV_ALT;;ALT;;WIS
+I_INSECTP;;Insect Piece;;NL_PLACE
+I_WATER;;Water;;Water
+I_HYDROGEN;;Hydrogen;;Waterstof
+I_OXYGEN;;Oxygen;;Zuurstof
+I_CARBON;;Carbon;;Koolstof
+I_ARSB;;Ars Bellici;;Ars Bellici
+I_CRAFM;;Crafter's Manual;;NL_PLACE
+ST_TERRY_CREATIVITY_NAME;; ;;NL_PLACE
+ST_TERRY_CREATIVITY_DESC;; ;;NL_PLACE
+ST_TERRY_SCAVENGER_NAME;; ;;NL_PLACE
+ST_TERRY_SCAVENGER_DESC;; ;;NL_PLACE
+ST_TERRY_SURVIVALIST_NAME;; ;;NL_PLACE
+ST_TERRY_SURVIVALIST_DESC;; ;;NL_PLACE
+ST_TERRY_RLOBL_NAME;; ;;NL_PLACE
+ST_TERRY_RLOBL_DESC;; ;;NL_PLACE
+ST_TERRY_RLITM_NAME;; ;;NL_PLACE
+ST_TERRY_RLITM_DESC;; ;;NL_PLACE
+AB_ACC_STRIKE;;Strike;;NL_PLACE
+AB_ACC_PSYCH;;Psych;;NL_PLACE
+OPEN_TERRY;;(A flower...)%BOX%(Professor Magistra taught us about these, but we still wonder how they grow.)%BOX%(We know that they need heat and earth, but how do they do it?)%BOX%(There must be something we don't know - maybe there's something in the earth that causes them to grow?)%BOX%...%BOX%(We know that our curiosity is evil, that the University holds all knowledge; still, we sometimes have doubt.)%BOX%(A few weeks ago our friend Dex was sick. Hero Curius said they would die, and of course we believed our Hero, as they hold all medical knowledge; yet our friend still lives, apparently in good health.)%BOX%(If we could be so wrong about our friend's health, perhaps our knowledge of plants is wrong as well...)%BOX%;;NL_PLACE
+OPEN_DEX_INTER;;Terry! Come on! We have to get back to work!;;NL_PLACE
+OPEN_TERRY_RESP;;Oh! Coming, Dex...;;NL_PLACE
