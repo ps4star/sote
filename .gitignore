@@ -3,4 +3,4 @@ out/static/uprefs
 _D*
 De*
 
-extlib/
+extlib/**/*.a
