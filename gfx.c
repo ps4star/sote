@@ -19,7 +19,7 @@ static const ENUM SOTE_RENDER_FILL_RECT = 3;
 static b32 resized_this_frame = 0;
 
 typedef struct { u8 r, g, b, a; } SOTE_Color;
-typedef struct { i32 x, y, w, h; } SOTE_Rect;
+typedef struct { f32 x, y, w, h; } SOTE_Rect;
 
 // Pixel buffer format
 // static const ENUM SOTE_FMT_RGBA8888 = 1;
@@ -68,9 +68,11 @@ static SOTE_RenderCommand *last_commands = 0;
 static i32 last_length = -1;
 
 static b32 same_as_last(SOTE_RenderBuffer *rbuf) {
+  return 0;
   if (resized_this_frame) { return 0; }
   if (last_commands == 0 || last_length < 0 || rbuf->length != last_length) { return 0; }
   assert(rbuf->length == last_length && rbuf->cmds != 0 && last_commands != 0);
+  printf("SAME BOOL: %d\n", (b32)(memcmp(rbuf->cmds, last_commands, rbuf->length * sizeof(SOTE_RenderCommand)) == 0));
   return (b32)(memcmp(rbuf->cmds, last_commands, rbuf->length * sizeof(SOTE_RenderCommand)) == 0);
 }
 
@@ -87,8 +89,10 @@ void memset_word(void *dst, i32 word, i32 length) {
   }
 }
 
+static b32 needs_tex_update = 1;
 void SOTE_render_commands_to_buffer(SOTE_RenderBuffer *rbuf, SOTE_Color *color_buffer, i32 sw, i32 sh) {
-  if (same_as_last(rbuf)) { return; } // do not re-render if it's exactly the same shit we did last frame
+  needs_tex_update = !same_as_last(rbuf);
+  if (!needs_tex_update) { return; } // do not re-render if it's exactly the same shit we did last frame
   for (i32 i = 0; i < rbuf->length; i++) {
     if (rbuf->cmds[i].type == SOTE_RENDER_CLEAR) {
       memset(color_buffer, 0, sw * sh * sizeof(SOTE_Color));

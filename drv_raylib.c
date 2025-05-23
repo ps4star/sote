@@ -15,17 +15,17 @@ void SOTE_DRV_init_video(void) {
 
 static i32 last_sw = -1;
 static i32 last_sh = -1;
-ENUM SOTE_DRV_begin_frame(i32 *ret_sw, i32 *ret_sh) {
+ENUM SOTE_DRV_begin_frame(i32 *ret_sw, i32 *ret_sh, f32 *ret_delta) {
   if (WindowShouldClose()) { return SOTE_DRV_CODE_EXIT; }
   resized_this_frame = 0;
   if (last_sw != GetScreenWidth() || last_sh != GetScreenHeight()) {
     resized_this_frame = 1;
   }
   last_sw = GetScreenWidth(); last_sh = GetScreenHeight();
-  if (ret_sw != 0) { *ret_sw = GetScreenWidth(); }
-  if (ret_sh != 0) { *ret_sh = GetScreenHeight(); }
+  if (ret_sw != 0) *ret_sw = GetScreenWidth();
+  if (ret_sh != 0) *ret_sh = GetScreenHeight();
+  if (ret_delta != 0) *ret_delta = GetFrameTime();
   BeginDrawing();
-  ClearBackground(BLACK);
   
   if (resized_this_frame) { return SOTE_DRV_CODE_RESIZE; }
   return SOTE_DRV_CODE_NORMAL;
@@ -42,11 +42,12 @@ void SOTE_DRV_end_frame(SOTE_Color *colors) {
     .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
   };
   if (resized_this_frame) {
+    ClearBackground(BLACK);
     if (IsTextureValid(stex)) { UnloadTexture(stex); }
     stex = LoadTextureFromImage(frame);
   } else {
     if (!IsTextureValid(stex)) { stex = LoadTextureFromImage(frame); }
-    else { UpdateTexture(stex, colors); }
+    else { if (needs_tex_update) { ClearBackground(BLACK); UpdateTexture(stex, colors); } }
   }
   DrawTexture(stex, 0, 0, WHITE);
   EndDrawing();
