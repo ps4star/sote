@@ -66,14 +66,10 @@ void SOTE_push_render_fill_rect(SOTE_RenderBuffer *rbuf, SOTE_Rect rect, SOTE_Co
 
 static SOTE_RenderCommand *last_commands = 0;
 static i32 last_length = -1;
-
 static b32 same_as_last(SOTE_RenderBuffer *rbuf) {
-  return 0;
   if (resized_this_frame) { return 0; }
   if (last_commands == 0 || last_length < 0 || rbuf->length != last_length) { return 0; }
-  assert(rbuf->length == last_length && rbuf->cmds != 0 && last_commands != 0);
-  printf("SAME BOOL: %d\n", (b32)(memcmp(rbuf->cmds, last_commands, rbuf->length * sizeof(SOTE_RenderCommand)) == 0));
-  return (b32)(memcmp(rbuf->cmds, last_commands, rbuf->length * sizeof(SOTE_RenderCommand)) == 0);
+  return (b32)(!memcmp(rbuf->cmds, last_commands, rbuf->length * sizeof(SOTE_RenderCommand)));
 }
 
 static void update_last(SOTE_RenderBuffer *rbuf) {

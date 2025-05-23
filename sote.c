@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     // Commit gfx to buffer, then from buffer to screen
     SOTE_render_commands_to_buffer(&g.rbuf, g.colors, g.sw, g.sh);
     SOTE_DRV_end_frame(g.colors);
-    g.frame_count += (i32)(3.0 * 60.0 * g.delta);
+    g.frame_count += (i32)(3.0 * 0.0 * 60.0 * g.delta);
     // printf("%d\n", g.frame_count);
   }
 }

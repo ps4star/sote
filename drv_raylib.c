@@ -22,16 +22,16 @@ ENUM SOTE_DRV_begin_frame(i32 *ret_sw, i32 *ret_sh, f32 *ret_delta) {
     resized_this_frame = 1;
   }
   last_sw = GetScreenWidth(); last_sh = GetScreenHeight();
-  if (ret_sw != 0) *ret_sw = GetScreenWidth();
-  if (ret_sh != 0) *ret_sh = GetScreenHeight();
-  if (ret_delta != 0) *ret_delta = GetFrameTime();
+  if (ret_sw != 0) { *ret_sw = GetScreenWidth(); }
+  if (ret_sh != 0) { *ret_sh = GetScreenHeight(); }
+  if (ret_delta != 0) { *ret_delta = GetFrameTime(); }
   BeginDrawing();
   
   if (resized_this_frame) { return SOTE_DRV_CODE_RESIZE; }
   return SOTE_DRV_CODE_NORMAL;
 }
 
-static Texture2D stex = (Texture2D){0};
+static Texture2D stex;
 void SOTE_DRV_end_frame(SOTE_Color *colors) {
   SOTE_Color c = (SOTE_Color){ 255, 0, 0, 255 };
   Image frame = (Image){
